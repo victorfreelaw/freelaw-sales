@@ -1,26 +1,165 @@
 @import "tailwindcss";
 
+/* FreelawSales Design System - Professional, corporate, sober */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Light theme with Freelaw brand colors */
+  --background: 224 20% 94%; /* Branco Freelaw */
+  --foreground: 247 45% 32%; /* Azul tech */
+  --card: 0 0% 100%;
+  --card-foreground: 247 45% 32%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 247 45% 32%;
+  --primary: 255 78% 55%; /* Roxo Freelaw */
+  --primary-foreground: 224 20% 94%;
+  --secondary: 247 45% 32%; /* Azul tech for more sober secondary */
+  --secondary-foreground: 224 20% 94%;
+  --muted: 224 15% 90%;
+  --muted-foreground: 247 25% 50%;
+  --accent: 263 52% 77%; /* Roxo sonho grande for subtle accents */
+  --accent-foreground: 247 45% 32%;
+  --destructive: 334 78% 38%;
+  --destructive-foreground: 224 20% 94%;
+  --border: 224 15% 85%;
+  --input: 224 15% 85%;
+  --ring: 255 78% 55%;
+  --radius: 0.5rem;
+  
+  /* Official Freelaw brand colors from brand book */
+  --freelaw-primary: 255 78% 55%; /* #5527AD - Roxo Freelaw */
+  --freelaw-secondary: 263 52% 77%; /* #A994E6 - Roxo sonho grande */
+  --freelaw-accent: 247 45% 32%; /* #241054 - Azul tech */
+  --freelaw-pink: 333 76% 52%; /* #DD2869 - Rosa produto */
+  --freelaw-gold: 46 78% 58%; /* #ECB43D - Ouro olímpico */
+  --freelaw-light: 224 20% 94%; /* #EDF0F7 - Branco Freelaw */
+  --freelaw-accent-dark: 246 38% 24%; /* #2B265C - Azul tech 2.0 */
+  --freelaw-pink-dark: 334 78% 38%; /* #AF115E - Rosa produto 2.0 */
+  --freelaw-gold-dark: 42 72% 43%; /* #BC801F - Ouro olímpico 2.0 */
+  --freelaw-black: 0 0% 5%; /* #0C0C0C - Preto Freelaw */
+  
+  /* Status colors derived from brand palette */
+  --freelaw-success: 136 52% 45%; /* Green derived from brand */
+  --freelaw-warning: 46 78% 58%; /* Ouro olímpico for warnings */
+  --freelaw-error: 334 78% 38%; /* Rosa produto dark for errors */
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  /* Tailwind CSS variables */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  
+  /* Official Freelaw brand colors */
+  --color-freelaw-primary: hsl(var(--freelaw-primary));
+  --color-freelaw-secondary: hsl(var(--freelaw-secondary));
+  --color-freelaw-accent: hsl(var(--freelaw-accent));
+  --color-freelaw-pink: hsl(var(--freelaw-pink));
+  --color-freelaw-gold: hsl(var(--freelaw-gold));
+  --color-freelaw-light: hsl(var(--freelaw-light));
+  --color-freelaw-accent-dark: hsl(var(--freelaw-accent-dark));
+  --color-freelaw-pink-dark: hsl(var(--freelaw-pink-dark));
+  --color-freelaw-gold-dark: hsl(var(--freelaw-gold-dark));
+  --color-freelaw-black: hsl(var(--freelaw-black));
+  
+  /* Status colors */
+  --color-freelaw-success: hsl(var(--freelaw-success));
+  --color-freelaw-warning: hsl(var(--freelaw-warning));
+  --color-freelaw-error: hsl(var(--freelaw-error));
+  
+  --radius: var(--radius);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Dark theme with Freelaw brand colors */
+.dark {
+  --background: 247 45% 32%; /* Azul tech */
+  --foreground: 224 20% 94%; /* Branco Freelaw */
+  --card: 246 38% 24%; /* Azul tech 2.0 */
+  --card-foreground: 224 20% 94%;
+  --popover: 246 38% 24%;
+  --popover-foreground: 224 20% 94%;
+  --primary: 255 78% 55%; /* Roxo Freelaw */
+  --primary-foreground: 224 20% 94%;
+  --secondary: 246 38% 24%; /* Azul tech 2.0 for sober secondary */
+  --secondary-foreground: 224 20% 94%;
+  --muted: 246 38% 24%;
+  --muted-foreground: 263 30% 70%;
+  --accent: 263 52% 77%; /* Roxo sonho grande for subtle accents */
+  --accent-foreground: 247 45% 32%;
+  --destructive: 334 78% 38%;
+  --destructive-foreground: 224 20% 94%;
+  --border: 246 38% 30%;
+  --input: 246 38% 30%;
+  --ring: 255 78% 55%;
+}
+
+/* Global styles with FreelawSales brand */
+* {
+  border-color: hsl(var(--border));
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Focus styles for accessibility */
+*:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.4);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.6);
+}
+
+/* Animations for smooth transitions */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-in-out;
 }
