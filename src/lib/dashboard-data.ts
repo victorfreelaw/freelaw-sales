@@ -1,7 +1,7 @@
 // Dashboard data fetching utilities
 import { db } from '@/db/connection';
 import { meetings, analyses, users } from '@/db/schema';
-import { eq, gte, desc, count, avg, and } from 'drizzle-orm';
+import { eq, gte, lt, desc, count, avg, and } from 'drizzle-orm';
 import { subDays, format, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -49,7 +49,7 @@ export async function getDashboardStats(userId?: string): Promise<DashboardStats
   const baseConditions = [gte(meetings.createdAt, thirtyDaysAgo)];
   const previousPeriodConditions = [
     gte(meetings.createdAt, sixtyDaysAgo),
-    gte(thirtyDaysAgo, meetings.createdAt) // Between 60-30 days ago
+    lt(meetings.createdAt, thirtyDaysAgo) // Between 60-30 days ago
   ];
   
   // Add user filter if provided (for role-based access)
@@ -215,7 +215,7 @@ export async function getPerformanceData(userId?: string): Promise<PerformanceDa
           and(
             ...conditions,
             gte(meetings.startedAt, weekStart),
-            gte(weekEnd, meetings.startedAt)
+            lt(meetings.startedAt, weekEnd)
           )
         );
 
@@ -227,7 +227,7 @@ export async function getPerformanceData(userId?: string): Promise<PerformanceDa
           and(
             ...conditions,
             gte(meetings.startedAt, weekStart),
-            gte(weekEnd, meetings.startedAt),
+            lt(meetings.startedAt, weekEnd),
             eq(analyses.icpFit, 'high')
           )
         );

@@ -19,6 +19,24 @@ export interface DevMeetingItem {
     icpFit: DevIcpFit;
     fullAnalysis?: any; // Análise completa do webhook
   };
+  transcript?: {
+    id: string;
+    rawText: string;
+    language: string;
+    processed: boolean;
+    speakers?: Array<{
+      id: string;
+      name?: string;
+      email?: string;
+    }>;
+    segments?: Array<{
+      speaker: string;
+      text: string;
+      start: number;
+      end: number;
+      confidence?: number;
+    }>;
+  };
   urlFathom?: string;
   source: string;
   createdAt: number;
@@ -56,7 +74,7 @@ export function addDevMeeting(params: {
     title: params.title || `Reunião - ${params.sellerName || 'Vendedor'}`,
     startedAt: params.meetingDate,
     durationSeconds: undefined,
-    status: 'completed',
+    status: params.analysis ? 'completed' : 'processing',
     seller: params.sellerEmail || params.sellerName ? {
       fullName: params.sellerName,
       email: params.sellerEmail,
@@ -90,6 +108,45 @@ export function listDevMeetings(page: number = 1, limit: number = 20) {
 
 export function getDevMeeting(id: string): DevMeetingItem | null {
   return devMeetings.find(meeting => meeting.id === id) || null;
+}
+
+export function updateDevMeetingAnalysis(id: string, analysis: {
+  scriptScore: number;
+  icpFit: DevIcpFit;
+  fullAnalysis?: any;
+}): boolean {
+  const meeting = devMeetings.find(m => m.id === id);
+  if (!meeting) return false;
+  
+  meeting.analysis = analysis;
+  meeting.status = 'completed';
+  return true;
+}
+
+export function updateDevMeetingTranscript(id: string, transcript: {
+  rawText: string;
+  language?: string;
+  segments?: Array<{
+    speaker: string;
+    text: string;
+    start: number;
+    end: number;
+    confidence?: number;
+  }>;
+}): boolean {
+  const meeting = devMeetings.find(m => m.id === id);
+  if (!meeting) return false;
+  
+  meeting.transcript = {
+    id: `${id}_transcript`,
+    rawText: transcript.rawText,
+    language: transcript.language || 'pt-BR',
+    processed: true,
+    speakers: [],
+    segments: transcript.segments || [],
+  };
+  
+  return true;
 }
 
 export function getDevStoreStats() {

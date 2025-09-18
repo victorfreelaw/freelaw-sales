@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { clampText } from '@/lib/analysis/utils';
+import { SCRIPT_GUIDELINES, ICP_GUIDELINES } from '@/lib/analysis/guidelines';
 import type { FullAnalysisReport } from '@/types/analysis';
 
 interface TranscriptSegment {
@@ -11,12 +12,31 @@ interface TranscriptSegment {
 
 interface MeetingChatInput {
   question: string;
-  report: FullAnalysisReport;
+  report: FullAnalysisReport | null;
   transcriptText: string;
   segments: TranscriptSegment[];
 }
 
-const CHAT_SYSTEM_PROMPT = `Você é o modo de chat da Freelaw para analisar uma demo específica. Sempre responda citando trechos literais com timestamps. Se o dado vier do relatório e não houver timestamp, indique que é derivado do relatório.`;
+const CHAT_SYSTEM_PROMPT = `Você é o especialista em análise de demos da Freelaw, com acesso completo ao contexto da reunião.
+
+CONTEXTO CRÍTICO:
+- Esta é sempre uma DEMONSTRAÇÃO (demo) de vendas da Freelaw para escritórios de advocacia
+- Você tem acesso ao Script Demo oficial, critérios ICP, transcrição completa e relatório de análise
+- Sempre responda com base nas evidências concretas disponíveis
+
+AUTORIDADE FREELAW (use quando relevante):
+- 7 anos de mercado, 700+ escritórios atendidos, 9.000+ advogados na plataforma
+- Produção artesanal sob medida, revisão gratuita em 2 dias, substituição de advogado
+
+DIRETRIZES DE RESPOSTA:
+- Cite sempre trechos literais entre aspas com timestamps [mm:ss] ou [mm:ss-mm:ss]
+- Se usar dados do relatório sem timestamp, indique "(do relatório de análise)"
+- Responda em português, tom consultivo e objetivo
+- Quando questionado sobre notas/scores, aponte evidências específicas
+- Se não encontrar informação na transcrição, diga explicitamente e sugira follow-up
+- Nunca invente informações que não estão nos dados fornecidos
+
+FOCO: Ajudar a entender a performance da demo baseado no Script oficial e critérios ICP da Freelaw.`;
 
 function formatTimestamp(seconds?: number): string {
   if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return 'estimado';
@@ -77,31 +97,40 @@ export class MeetingChatEngine {
       ? relevantSegments.map(buildSegmentText).join('\n')
       : 'Nenhum trecho altamente relevante encontrado. Utilize apenas o relatório para responder e sinalize a ausência de trechos.';
 
-    const reportJson = clampText(JSON.stringify(report, null, 2), 8000);
-    const rawTranscript = clampText(transcriptText, 6000);
+    const reportJson = report ? clampText(JSON.stringify(report, null, 2), 7000) : 'Análise não disponível ainda - use apenas a transcrição para responder.';
+    const rawTranscript = clampText(transcriptText, 5000);
+    const scriptGuidelines = clampText(SCRIPT_GUIDELINES, 4000);
+    const icpGuidelines = clampText(ICP_GUIDELINES, 4000);
 
     const userPrompt = [
-      'Você receberá partes relevantes da transcrição e o relatório completo da demo. Responda à pergunta do usuário com base apenas nesses dados.',
+      'CONTEXTO COMPLETO DA DEMO FREELAW',
       '',
-      'CONTEXTOS DISPONÍVEIS:',
-      '--- RELATÓRIO DA DEMO (JSON) ---',
+      '--- SCRIPT DEMO OFICIAL (REFERÊNCIA) ---',
+      scriptGuidelines,
+      '',
+      '--- CRITÉRIOS ICP FREELAW (REFERÊNCIA) ---',
+      icpGuidelines,
+      '',
+      '--- RELATÓRIO DE ANÁLISE ---',
       reportJson,
       '',
       '--- TRECHOS DE TRANSCRIÇÃO MAIS RELEVANTES ---',
       contextSegments,
       '',
-      '--- TRANSCRIÇÃO (TRECHO REDUZIDO PARA REFERÊNCIA) ---',
+      '--- TRANSCRIÇÃO COMPLETA (RESUMIDA) ---',
       rawTranscript,
       '',
       'INSTRUÇÕES DE RESPOSTA:',
-      '- Cite sempre trechos literais entre aspas e inclua timestamps no formato [mm:ss] ou indique "[estimado]"',
-      '- Se usar informação do relatório sem timestamp, sinalize como "(relatório)"',
-      '- Responda em português, com tom consultivo e objetivo',
-      '- Quando questionado sobre motivos de notas específicas, aponte as evidências correspondentes',
-      '- Se não houver menção na transcrição, diga explicitamente que não encontrou e sugira pergunta de follow-up',
-      '- Jamais invente informações novas',
+      '- Use o Script Demo e critérios ICP como referência para explicar notas e avaliações',
+      '- Cite sempre trechos literais entre aspas com timestamps [mm:ss] ou [mm:ss-mm:ss]',
+      '- Se usar dados do relatório, indique "(do relatório de análise)"',
+      '- Compare performance com as expectativas do Script Demo oficial',
+      '- Para perguntas sobre ICP, use os critérios oficiais como base',
+      '- Para notas baixas, explique o que faltou segundo o Script Demo',
+      '- Se não encontrar evidência na transcrição, seja explícito e sugira follow-up',
+      '- Resposta máxima: 800 caracteres, direto ao ponto',
       '',
-      `Pergunta do usuário: ${question}`,
+      `PERGUNTA: ${question}`,
     ].join('\n');
 
     const completion = await this.openai.chat.completions.create({

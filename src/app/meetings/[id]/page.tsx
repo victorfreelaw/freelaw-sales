@@ -7,7 +7,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { Loader2 } from 'lucide-react';
 
 interface MeetingDetailsPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 function MeetingDetailsSkeleton() {
@@ -47,7 +47,8 @@ async function MeetingDetailsPage({ params }: MeetingDetailsPageProps) {
 
   // For reps, only show their own meetings
   const userId = user.role === 'rep' ? user.id : undefined;
-  const meeting = await getMeetingDetails(params.id, userId);
+  const { id } = await params;
+  const meeting = await getMeetingDetails(id, userId);
 
   if (!meeting) {
     notFound();

@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = await getCurrentUser();
@@ -16,7 +16,8 @@ export async function GET(
     // For reps, only show their own meetings
     const userId = user.role === 'rep' ? user.id : undefined;
     
-    const meeting = await getMeetingDetails(params.id, userId);
+    const { id } = await params;
+    const meeting = await getMeetingDetails(id, userId);
     
     if (!meeting) {
       return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });

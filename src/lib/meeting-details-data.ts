@@ -114,6 +114,14 @@ export async function getMeetingDetails(id: string, userId?: string): Promise<Me
           email: devMeeting.seller.email || 'dev@example.com',
           role: 'rep',
         } : undefined,
+        transcript: devMeeting.transcript ? {
+          id: devMeeting.transcript.id,
+          rawText: devMeeting.transcript.rawText,
+          language: devMeeting.transcript.language,
+          processed: devMeeting.transcript.processed,
+          speakers: devMeeting.transcript.speakers || [],
+          segments: devMeeting.transcript.segments || [],
+        } : undefined,
         analysis: devMeeting.analysis ? {
           id: `${devMeeting.id}_analysis`,
           scriptScore: devMeeting.analysis.scriptScore,

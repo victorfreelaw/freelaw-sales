@@ -173,7 +173,12 @@ function SidebarContent({
                     />
                     <div className="flex flex-col">
                       <span>{item.name}</span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className={cn(
+                        "text-xs",
+                        isActive 
+                          ? "text-primary-foreground/70" 
+                          : "text-muted-foreground"
+                      )}>
                         {item.description}
                       </span>
                     </div>

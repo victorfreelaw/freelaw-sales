@@ -17,10 +17,12 @@ interface MeetingChatProps {
 }
 
 const DEFAULT_SUGGESTIONS = [
-  'Mostre os trechos onde o cliente fala de sobrecarga.',
-  'Escreva uma mensagem de follow-up personalizada com base nas dores e no ICP.',
-  'Liste as objeções e proponha respostas, citando os pontos da demo.',
-  'Por que a nota de "Metodologia" ficou abaixo de 6/10? Traga as evidências.',
+  'Por que a nota de "Metodologia" ficou baixa? O que faltou segundo o Script Demo?',
+  'Mostre os trechos exatos onde o cliente menciona sobrecarga ou perdas de prazo.',
+  'Este cliente se encaixa no ICP ideal? Analise faturamento, porte e dores.',
+  'Liste as objeções com timestamps e sugira como tratar cada uma.',
+  'Escreva uma mensagem de follow-up personalizada baseada na análise completa.',
+  'Quais etapas do Script Demo foram bem executadas? Cite as evidências.',
 ];
 
 export function MeetingChat({ meetingId, disabled }: MeetingChatProps) {
@@ -78,26 +80,9 @@ export function MeetingChat({ meetingId, disabled }: MeetingChatProps) {
         <CardTitle className="text-base font-semibold">Chat da Reunião</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Sparkles className="h-3 w-3" /> Faça perguntas sobre a transcrição ou sobre o relatório. Respostas sempre trazem trechos literais com timestamp.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {DEFAULT_SUGGESTIONS.map((suggestion) => (
-              <Button
-                key={suggestion}
-                variant="outline"
-                size="sm"
-                disabled={isLoading || disabled}
-                onClick={() => handleSend(suggestion)}
-              >
-                {suggestion}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        <Separator />
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <Sparkles className="h-3 w-3" /> Chat especializado com acesso ao Script Demo oficial, critérios ICP, transcrição completa e relatório de análise. Respostas sempre com evidências e timestamps.
+        </p>
 
         <div
           ref={containerRef}
@@ -105,7 +90,7 @@ export function MeetingChat({ meetingId, disabled }: MeetingChatProps) {
         >
           {messages.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nenhuma interação ainda. Escolha uma sugestão ou envie sua pergunta.
+              Nenhuma interação ainda. Digite sua pergunta abaixo para começar.
             </p>
           ) : (
             messages.map((message, index) => (

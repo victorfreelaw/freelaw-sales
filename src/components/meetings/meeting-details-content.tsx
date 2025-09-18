@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,6 +41,8 @@ interface MeetingDetailsContentProps {
 }
 
 export function MeetingDetailsContent({ meeting, currentUser }: MeetingDetailsContentProps) {
+  const [isTranscriptExpanded, setIsTranscriptExpanded] = useState(false);
+
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case 'completed': return 'success';
@@ -253,10 +256,21 @@ export function MeetingDetailsContent({ meeting, currentUser }: MeetingDetailsCo
                   <CardHeader>
                     <CardTitle className="text-sm">Resumo Executivo</CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm">
-                    <p className="text-muted-foreground leading-relaxed">
-                      {meeting.analysis.summary}
-                    </p>
+                  <CardContent className="text-sm space-y-3">
+                    {meeting.analysis.fullReport?.resumo_executivo && (
+                      <div>
+                        <p className="text-muted-foreground leading-relaxed">
+                          {meeting.analysis.fullReport.resumo_executivo}
+                        </p>
+                      </div>
+                    )}
+                    {meeting.analysis.summary && meeting.analysis.summary !== meeting.analysis.fullReport?.resumo_executivo && (
+                      <div>
+                        <p className="text-muted-foreground leading-relaxed">
+                          {meeting.analysis.summary}
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -266,11 +280,19 @@ export function MeetingDetailsContent({ meeting, currentUser }: MeetingDetailsCo
                       <CardTitle className="text-sm">Transcrição</CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm">
-                      <p className="text-muted-foreground line-clamp-6">
-                        {meeting.transcript.rawText?.substring(0, 300)}...
+                      <p className={`text-muted-foreground whitespace-pre-wrap ${isTranscriptExpanded ? '' : 'line-clamp-6'}`}>
+                        {isTranscriptExpanded 
+                          ? meeting.transcript.rawText 
+                          : `${meeting.transcript.rawText?.substring(0, 300)}...`
+                        }
                       </p>
-                      <Button variant="outline" size="sm" className="mt-2 w-full">
-                        Ver Transcrição Completa
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-2 w-full"
+                        onClick={() => setIsTranscriptExpanded(!isTranscriptExpanded)}
+                      >
+                        {isTranscriptExpanded ? 'Ver Menos' : 'Ver Transcrição Completa'}
                       </Button>
                     </CardContent>
                   </Card>
@@ -325,11 +347,19 @@ export function MeetingDetailsContent({ meeting, currentUser }: MeetingDetailsCo
                       <CardTitle className="text-sm">Transcrição</CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm">
-                      <p className="text-muted-foreground line-clamp-6">
-                        {meeting.transcript.rawText?.substring(0, 300)}...
+                      <p className={`text-muted-foreground whitespace-pre-wrap ${isTranscriptExpanded ? '' : 'line-clamp-6'}`}>
+                        {isTranscriptExpanded 
+                          ? meeting.transcript.rawText 
+                          : `${meeting.transcript.rawText?.substring(0, 300)}...`
+                        }
                       </p>
-                      <Button variant="outline" size="sm" className="mt-2 w-full">
-                        Ver Transcrição Completa
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-2 w-full"
+                        onClick={() => setIsTranscriptExpanded(!isTranscriptExpanded)}
+                      >
+                        {isTranscriptExpanded ? 'Ver Menos' : 'Ver Transcrição Completa'}
                       </Button>
                     </CardContent>
                   </Card>

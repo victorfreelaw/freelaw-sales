@@ -10,7 +10,7 @@
   --card-foreground: 247 45% 32%;
   --popover: 0 0% 100%;
   --popover-foreground: 247 45% 32%;
-  --primary: 255 78% 55%; /* Roxo Freelaw */
+  --primary: 252 60% 42%; /* Roxo Freelaw */
   --primary-foreground: 224 20% 94%;
   --secondary: 247 45% 32%; /* Azul tech for more sober secondary */
   --secondary-foreground: 224 20% 94%;
@@ -22,11 +22,11 @@
   --destructive-foreground: 224 20% 94%;
   --border: 224 15% 85%;
   --input: 224 15% 85%;
-  --ring: 255 78% 55%;
+  --ring: 252 60% 42%;
   --radius: 0.5rem;
   
   /* Official Freelaw brand colors from brand book */
-  --freelaw-primary: 255 78% 55%; /* #5527AD - Roxo Freelaw */
+  --freelaw-primary: 252 60% 42%; /* #5729ae - Roxo Freelaw */
   --freelaw-secondary: 263 52% 77%; /* #A994E6 - Roxo sonho grande */
   --freelaw-accent: 247 45% 32%; /* #241054 - Azul tech */
   --freelaw-pink: 333 76% 52%; /* #DD2869 - Rosa produto */
@@ -95,7 +95,7 @@
   --card-foreground: 224 20% 94%;
   --popover: 246 38% 24%;
   --popover-foreground: 224 20% 94%;
-  --primary: 255 78% 55%; /* Roxo Freelaw */
+  --primary: 252 60% 42%; /* Roxo Freelaw */
   --primary-foreground: 224 20% 94%;
   --secondary: 246 38% 24%; /* Azul tech 2.0 for sober secondary */
   --secondary-foreground: 224 20% 94%;
@@ -107,7 +107,7 @@
   --destructive-foreground: 224 20% 94%;
   --border: 246 38% 30%;
   --input: 246 38% 30%;
-  --ring: 255 78% 55%;
+  --ring: 252 60% 42%;
 }
 
 /* Global styles with FreelawSales brand */
