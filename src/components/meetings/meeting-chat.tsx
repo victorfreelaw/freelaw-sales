@@ -9,6 +9,11 @@ import { MessageSquare, Send, Sparkles } from 'lucide-react';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  metadata?: {
+    sourceType?: 'rag' | 'report' | 'fallback';
+    relevantChunks?: number;
+    processingTime?: number;
+  };
 }
 
 interface MeetingChatProps {
@@ -23,6 +28,8 @@ const DEFAULT_SUGGESTIONS = [
   'Liste as objeções com timestamps e sugira como tratar cada uma.',
   'Escreva uma mensagem de follow-up personalizada baseada na análise completa.',
   'Quais etapas do Script Demo foram bem executadas? Cite as evidências.',
+  'Qual foi o momento de maior interesse do cliente? Cite o trecho exato.',
+  'Como foi abordada a metodologia de delegação? O cliente entendeu?'
 ];
 
 export function MeetingChat({ meetingId, disabled }: MeetingChatProps) {
@@ -57,7 +64,15 @@ export function MeetingChat({ meetingId, disabled }: MeetingChatProps) {
       }
 
       const data = await response.json();
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.answer || 'Sem resposta disponível.' }]);
+      setMessages((prev) => [...prev, { 
+        role: 'assistant', 
+        content: data.answer || 'Sem resposta disponível.',
+        metadata: {
+          sourceType: data.sourceType,
+          relevantChunks: data.relevantChunks,
+          processingTime: data.processingTime
+        }
+      }]);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao consultar chat';
       setError(message);
@@ -81,7 +96,7 @@ export function MeetingChat({ meetingId, disabled }: MeetingChatProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground flex items-center gap-1">
-          <Sparkles className="h-3 w-3" /> Chat especializado com acesso ao Script Demo oficial, critérios ICP, transcrição completa e relatório de análise. Respostas sempre com evidências e timestamps.
+          <Sparkles className="h-3 w-3" /> Chat RAG inteligente com busca semântica, Script Demo oficial, critérios ICP e análise completa. Respostas sempre com evidências e timestamps.
         </p>
 
         <div
@@ -103,6 +118,25 @@ export function MeetingChat({ meetingId, disabled }: MeetingChatProps) {
                 }
               >
                 <p className="whitespace-pre-line text-foreground">{message.content}</p>
+                {message.role === 'assistant' && message.metadata && (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                    {message.metadata.sourceType === 'rag' && (
+                      <span className="flex items-center gap-1">
+                        <Sparkles className="h-3 w-3 text-green-500" />
+                        RAG ({message.metadata.relevantChunks} trechos)
+                      </span>
+                    )}
+                    {message.metadata.sourceType === 'report' && (
+                      <span className="text-blue-500">📊 Relatório</span>
+                    )}
+                    {message.metadata.sourceType === 'fallback' && (
+                      <span className="text-yellow-500">⚠️ Padrão</span>
+                    )}
+                    {message.metadata.processingTime && (
+                      <span>{message.metadata.processingTime}ms</span>
+                    )}
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -110,6 +144,25 @@ export function MeetingChat({ meetingId, disabled }: MeetingChatProps) {
 
         {error && (
           <p className="text-xs text-red-500">{error}</p>
+        )}
+
+        {/* Sugestões de perguntas */}
+        {messages.length === 0 && !disabled && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Perguntas sugeridas:</p>
+            <div className="grid grid-cols-1 gap-1">
+              {DEFAULT_SUGGESTIONS.slice(0, 4).map((suggestion, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleSend(suggestion)}
+                  disabled={isLoading}
+                  className="text-left text-xs p-2 rounded border border-muted/40 hover:bg-muted/60 transition-colors disabled:opacity-50"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getMeetingDetails } from '@/lib/meeting-details-data';
 import { MeetingChatEngine } from '@/lib/chat/meeting-chat-engine';
+import { createRAGChatEngine } from '@/lib/chat/rag-chat-engine';
 
 const BodySchema = z.object({
   question: z.string().min(5, 'Pergunta muito curta'),
@@ -105,15 +106,43 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }))
       : buildFallbackSegments(transcriptText);
 
-    const engine = new MeetingChatEngine(process.env.OPENAI_API_KEY);
-    const answer = await engine.answer({
-      question,
-      report: meeting.analysis?.fullReport || null,
-      transcriptText,
-      segments,
-    });
+    // Tenta usar RAG Engine primeiro (melhor qualidade para reuniões longas)
+    const ragEngine = createRAGChatEngine();
+    
+    if (ragEngine) {
+      console.log('🔍 Usando RAG Chat Engine para resposta otimizada');
+      const ragResponse = await ragEngine.answer({
+        question,
+        meetingId: id,
+        report: meeting.analysis?.fullReport || null,
+        maxResults: 5,
+        includeTimestamps: true
+      });
 
-    return NextResponse.json({ answer });
+      return NextResponse.json({
+        answer: ragResponse.answer,
+        sourceType: ragResponse.sourceType,
+        relevantChunks: ragResponse.relevantChunks.length,
+        processingTime: ragResponse.processingTime
+      });
+    } else {
+      // Fallback para engine original
+      console.log('⚠️ RAG indisponível, usando engine original');
+      const engine = new MeetingChatEngine(process.env.OPENAI_API_KEY);
+      const answer = await engine.answer({
+        question,
+        report: meeting.analysis?.fullReport || null,
+        transcriptText,
+        segments,
+      });
+
+      return NextResponse.json({ 
+        answer,
+        sourceType: 'fallback',
+        relevantChunks: 0,
+        processingTime: 0
+      });
+    }
   } catch (error) {
     console.error('Meeting chat error:', error);
     if (error instanceof z.ZodError) {
