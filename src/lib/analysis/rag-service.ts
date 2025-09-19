@@ -43,11 +43,27 @@ interface RAGSearchOptions {
   useCache?: boolean;
 }
 
+
+interface DevCacheEntry {
+  chunks: TranscriptChunk[];
+  stats: RAGProcessResult['stats'];
+  cachedAt: Date;
+  embeddings?: ChunkEmbedding[];
+}
+
+type StorageStats = {
+  totalChunks: number;
+  totalMeetings: number;
+  avgChunkSize: number;
+  storageUsed: number;
+  mode: 'supabase' | 'dev_cache';
+};
+
 class RAGService {
   private embeddingService: EmbeddingService;
   private topicExtractor: TopicExtractor;
   private vectorStore: SupabaseVectorStore | null;
-  private devModeCache: Map<string, any> = new Map();
+  private devModeCache: Map<string, DevCacheEntry> = new Map();
 
   constructor(openAIKey: string) {
     this.embeddingService = new EmbeddingService(openAIKey);
@@ -69,6 +85,11 @@ class RAGService {
       // 2. Extração de tópicos (em paralelo para otimizar)
       console.log('🔄 Extraindo tópicos...');
       const topicsMap = await this.topicExtractor.extractTopicsFromChunks(chunks);
+      chunks.forEach(chunk => {
+        if (chunk.metadata) {
+          chunk.metadata.topics = topicsMap[chunk.id] || [];
+        }
+      });
 
       // 3. Geração de embeddings
       console.log('🔄 Gerando embeddings...');
@@ -80,6 +101,18 @@ class RAGService {
         embedding.topics = topicsMap[embedding.chunkId] || [];
       });
 
+      const cacheEntry: DevCacheEntry = {
+        chunks,
+        stats,
+        cachedAt: new Date()
+      };
+
+      if (!this.vectorStore) {
+        cacheEntry.embeddings = embeddings;
+      }
+
+      this.devModeCache.set(`embeddings_${meetingId}`, cacheEntry);
+
       console.log(`✅ Gerados ${embeddings.length} embeddings`);
 
       // 4. Armazenamento
@@ -90,12 +123,6 @@ class RAGService {
         console.log(`✅ Armazenados ${storedCount} embeddings no Supabase`);
       } else {
         // Fallback: armazenar em cache local para dev
-        this.devModeCache.set(`embeddings_${meetingId}`, {
-          embeddings,
-          chunks,
-          stats,
-          createdAt: new Date()
-        });
         storedCount = embeddings.length;
         console.log(`✅ Armazenados ${storedCount} embeddings em cache local (dev mode)`);
       }
@@ -147,6 +174,7 @@ class RAGService {
       }
 
       let results: EmbeddingSearchResult[] = [];
+      let resultSource: 'vector' | 'dev-cache' = 'vector';
 
       if (this.vectorStore) {
         // Busca no Supabase
@@ -166,13 +194,25 @@ class RAGService {
           minSimilarity,
           filters
         );
+
+        if (results.length === 0) {
+          const fallbackResults = await this.searchInDevCache(meetingId, query, options);
+          if (fallbackResults.length > 0) {
+            console.warn(`RAG fallback: usando cache local para "${query}" (meeting ${meetingId})`);
+            results = fallbackResults;
+            resultSource = 'dev-cache';
+          }
+        }
       } else {
         // Fallback: busca em cache local
         results = await this.searchInDevCache(meetingId, query, options);
+        if (results.length > 0) {
+          resultSource = 'dev-cache';
+        }
       }
 
       // Salva resultado em cache
-      if (useCache && results.length > 0) {
+      if (useCache && results.length > 0 && this.vectorStore && resultSource === 'vector') {
         await this.cacheSearchResult(meetingId, analysisType, query, options, results);
       }
 
@@ -311,17 +351,7 @@ class RAGService {
     query: string, 
     options: RAGSearchOptions
   ): Promise<EmbeddingSearchResult[]> {
-    const cached = this.devModeCache.get(`embeddings_${meetingId}`);
-    if (!cached) return [];
-
-    // Busca simples por palavras-chave em dev mode
-    const queryWords = query.toLowerCase().split(' ');
-    const relevantChunks = cached.chunks.filter((chunk: TranscriptChunk) => {
-      const content = chunk.content.toLowerCase();
-      return queryWords.some(word => content.includes(word));
-    });
-
-    return this.chunksToSearchResults(relevantChunks.slice(0, options.maxResults || 10));
+    return this.searchCachedChunks(meetingId, query, options);
   }
 
   private chunksToSearchResults(chunks: TranscriptChunk[]): EmbeddingSearchResult[] {
@@ -343,6 +373,109 @@ class RAGService {
       seen.add(result.chunkId);
       return true;
     });
+  }
+
+  private searchCachedChunks(
+    meetingId: string,
+    query: string,
+    options: RAGSearchOptions
+  ): EmbeddingSearchResult[] {
+    const cached = this.devModeCache.get(`embeddings_${meetingId}`);
+    if (!cached?.chunks?.length) return [];
+
+    const maxResults = options.maxResults || 10;
+    let candidateChunks: TranscriptChunk[] = cached.chunks;
+
+    if (options.timeRange) {
+      const { start, end } = options.timeRange;
+      candidateChunks = candidateChunks.filter(chunk =>
+        chunk.startTime <= end && chunk.endTime >= start
+      );
+    }
+
+    if (options.speakers?.length) {
+      const speakerSet = new Set(options.speakers.map(s => this.normalizeText(s)));
+      candidateChunks = candidateChunks.filter(chunk =>
+        chunk.speakers.some(speaker => speakerSet.has(this.normalizeText(speaker)))
+      );
+    }
+
+    if (options.topics?.length) {
+      const topicSet = new Set(options.topics.map(topic => this.normalizeText(topic)));
+      candidateChunks = candidateChunks.filter(chunk => {
+        const topics = chunk.metadata?.topics || [];
+        return topics.some(topic => topicSet.has(this.normalizeText(topic)));
+      });
+    }
+
+    if (candidateChunks.length === 0) {
+      return [];
+    }
+
+    const ranked = this.rankChunksByQuery(candidateChunks, query);
+
+    if (ranked.length > 0) {
+      return this.chunksToSearchResults(ranked.slice(0, maxResults).map(item => item.chunk));
+    }
+
+    const fallbackChunks = candidateChunks.slice(0, maxResults);
+    if (fallbackChunks.length > 0) {
+      console.warn(`RAG fallback: usando primeiros ${fallbackChunks.length} chunks para "${query}" (meeting ${meetingId})`);
+      return this.chunksToSearchResults(fallbackChunks);
+    }
+
+    return [];
+  }
+
+  private rankChunksByQuery(
+    chunks: TranscriptChunk[],
+    query: string
+  ): Array<{ chunk: TranscriptChunk; score: number }> {
+    const normalizedWords = this.normalizeText(query)
+      .split(/\s+/)
+      .map(word => word.trim())
+      .filter(word => word.length > 2);
+
+    if (normalizedWords.length === 0) {
+      return [];
+    }
+
+    const total = Math.max(chunks.length, 1);
+
+    return chunks
+      .map((chunk, index) => {
+        const content = this.normalizeText(chunk.content);
+        let score = 0;
+
+        for (const word of normalizedWords) {
+          if (content.includes(word)) {
+            score += 3;
+          } else if (word.length > 4) {
+            const stemLength = Math.max(3, Math.floor(word.length * 0.6));
+            const stem = word.slice(0, stemLength);
+            if (content.includes(stem)) {
+              score += 1;
+            }
+          }
+        }
+
+        const positionBoost = 1 - index / total;
+        score += positionBoost * 0.2;
+
+        return { chunk, score };
+      })
+      .filter(item => item.score > 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.chunk.startTime - b.chunk.startTime;
+      });
+  }
+
+  private normalizeText(value: string): string {
+    return value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
   }
 
   private generateCacheKey(
@@ -383,20 +516,68 @@ class RAGService {
   }
 
   // Estatísticas e diagnósticos
-  async getStats(meetingId?: string): Promise<any> {
+  async getStats(meetingId?: string): Promise<StorageStats> {
     if (this.vectorStore) {
-      return await this.vectorStore.getStorageStats(meetingId);
-    } else {
-      const cache = meetingId ? 
-        this.devModeCache.get(`embeddings_${meetingId}`) : 
-        Array.from(this.devModeCache.values());
-      
+      const stats = await this.vectorStore.getStorageStats(meetingId);
+      return { ...stats, mode: 'supabase' };
+    }
+
+    if (meetingId) {
+      const cache = this.devModeCache.get(`embeddings_${meetingId}`);
+      if (!cache) {
+        return {
+          totalChunks: 0,
+          totalMeetings: 0,
+          avgChunkSize: 0,
+          storageUsed: 0,
+          mode: 'dev_cache'
+        };
+      }
+
+      const totalChunks = cache.chunks.length;
+      const totalTokens = cache.stats.totalTokens;
+      const avgChunkSize = totalChunks > 0 ? Math.round(totalTokens / totalChunks) : 0;
+
       return {
-        totalChunks: Array.isArray(cache) ? cache.length : (cache?.chunks?.length || 0),
-        totalMeetings: this.devModeCache.size,
+        totalChunks,
+        totalMeetings: 1,
+        avgChunkSize,
+        storageUsed: totalTokens * 4,
         mode: 'dev_cache'
       };
     }
+
+    const entries = Array.from(this.devModeCache.values());
+    if (entries.length === 0) {
+      return {
+        totalChunks: 0,
+        totalMeetings: 0,
+        avgChunkSize: 0,
+        storageUsed: 0,
+        mode: 'dev_cache'
+      };
+    }
+
+    const totals = entries.reduce(
+      (acc, entry) => {
+        acc.totalChunks += entry.chunks.length;
+        acc.totalTokens += entry.stats.totalTokens;
+        return acc;
+      },
+      { totalChunks: 0, totalTokens: 0 }
+    );
+
+    const avgChunkSize = totals.totalChunks > 0
+      ? Math.round(totals.totalTokens / totals.totalChunks)
+      : 0;
+
+    return {
+      totalChunks: totals.totalChunks,
+      totalMeetings: entries.length,
+      avgChunkSize,
+      storageUsed: totals.totalTokens * 4,
+      mode: 'dev_cache'
+    };
   }
 
   async testConnection(): Promise<boolean> {

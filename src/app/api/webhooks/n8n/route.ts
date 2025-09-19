@@ -24,33 +24,40 @@ const N8N_WEBHOOK_SECRET = process.env.N8N_WEBHOOK_SECRET;
 async function processAnalysisInBackground(data: N8NTranscriptPayload, meetingId: string) {
   try {
     console.log('Iniciando análise IA em background para meeting:', meetingId);
-    
-    const mode = process.env.ANALYSIS_MODE || 'mock';
-    const { FreelawAnalysisEngine } = await import('@/lib/analysis/engine');
-    const { MockAnalysisEngine } = await import('@/lib/analysis/mock-engine');
-    const engineIsLive = mode === 'live' && !!process.env.OPENAI_API_KEY;
-    const engine = engineIsLive
-      ? new FreelawAnalysisEngine(process.env.OPENAI_API_KEY as string)
-      : new MockAnalysisEngine();
-    
-    console.log('Background analysis engine selected:', engineIsLive ? 'live' : 'mock');
-    
-    const analysis = await engine.analyzeTranscript(data.transcript, meetingId);
-    
-    // Atualizar o meeting com a análise
+
+    const [{ createAnalysisPipeline }, { buildPersistableAnalysis }] = await Promise.all([
+      import('@/lib/analysis/analysis-pipeline'),
+      import('@/lib/analysis/pipeline-result-utils'),
+    ]);
+
+    const pipeline = createAnalysisPipeline();
+    if (!pipeline) {
+      throw new Error('Pipeline de análise não pôde ser inicializado');
+    }
+
+    const pipelineResult = await pipeline.executeFullPipeline({
+      meetingId,
+      rawTranscript: data.transcript,
+    });
+
+    if (!pipelineResult.success) {
+      throw new Error('Pipeline de análise retornou falha');
+    }
+
+    const summary = buildPersistableAnalysis(pipelineResult);
+
     if (process.env.DATABASE_URL?.includes('fake') || process.env.DEV_STORE_ENABLED === 'true') {
       const { updateDevMeetingAnalysis } = await import('@/lib/dev-store');
-      const icpFit = (analysis?.icpFit as 'high' | 'medium' | 'low') ||
-        (analysis?.report?.analise_icp?.status?.toLowerCase() as 'high' | 'medium' | 'low') ||
-        'medium';
-      const scriptScore = Number(analysis?.scriptScore ?? analysis?.report?.aderencia_ao_script?.score_geral) || 0;
-      
+
       updateDevMeetingAnalysis(meetingId, {
-        scriptScore,
-        icpFit,
-        fullAnalysis: analysis
+        scriptScore: summary.scriptScore,
+        icpFit: summary.icpFit,
+        fullAnalysis: {
+          report: summary.fullReport,
+          stats: summary.pipelineStats,
+        },
       });
-      
+
       console.log('Background analysis completed for meeting:', meetingId);
     }
   } catch (error) {

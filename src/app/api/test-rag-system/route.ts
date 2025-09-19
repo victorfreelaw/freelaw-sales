@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 5. Estatísticas finais
-    const finalStats = await pipeline.ragService?.getStats(testMeetingId);
+    const finalStats = await pipeline.getRagService().getStats(testMeetingId);
 
     const testResult = {
       success: true,
@@ -139,8 +139,8 @@ export async function GET(request: NextRequest) {
       components: {
         pipeline: !!pipeline,
         chatEngine: !!chatEngine,
-        ragService: !!pipeline?.ragService,
-        multiModel: !!pipeline?.multiModelEngine
+        ragService: systemHealth.ragService,
+        multiModel: systemHealth.multiModel
       }
     };
 
@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const pipeline = createAnalysisPipeline();
-    if (!pipeline?.ragService) {
+    if (!pipeline) {
       return NextResponse.json({ success: false, error: 'RAG Service indisponível' });
     }
 

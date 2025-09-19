@@ -1,25 +1,22 @@
 // Background processor for analyzing transcripts
 import { db } from '@/db/connection';
 import { transcripts, analyses, meetings } from '@/db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
-import { FreelawAnalysisEngine } from './engine';
-import { MockAnalysisEngine } from './mock-engine';
+import { eq, and, isNull, isNotNull } from 'drizzle-orm';
+import { createAnalysisPipeline, type AnalysisPipeline } from './analysis-pipeline';
+import { buildPersistableAnalysis } from './pipeline-result-utils';
 import { Telemetry } from '@/lib/telemetry';
 
 export class AnalysisProcessor {
-  private engine: FreelawAnalysisEngine;
+  private pipeline: AnalysisPipeline;
   private isProcessing = false;
 
   constructor() {
-    const mode = process.env.ANALYSIS_MODE || 'live';
-    if (mode === 'mock') {
-      this.engine = new MockAnalysisEngine() as any;
-    } else {
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error('OPENAI_API_KEY is required for analysis processing');
-      }
-      this.engine = new FreelawAnalysisEngine(process.env.OPENAI_API_KEY);
+    const pipeline = createAnalysisPipeline();
+    if (!pipeline) {
+      throw new Error('Analysis pipeline is not available');
     }
+
+    this.pipeline = pipeline;
   }
 
   // Process a specific transcript by ID
@@ -45,7 +42,7 @@ export class AnalysisProcessor {
         return false;
       }
 
-      const { id, meetingId, rawText, meetingTitle, segments } = transcript[0];
+      const { id, meetingId, rawText } = transcript[0];
 
       // Check if analysis already exists
       const existingAnalysis = await db
@@ -59,47 +56,48 @@ export class AnalysisProcessor {
         return true;
       }
 
-      // Run analysis
-      console.log(`Starting analysis for transcript ${id} (meeting: ${meetingId})`);
-      const parsedSegments = Array.isArray(segments)
-        ? (segments as Array<{ speaker?: string; text?: string; start?: number; end?: number }>)
-        : [];
+      // Run analysis via pipeline
+      console.log(`Starting pipeline analysis for transcript ${id} (meeting: ${meetingId})`);
 
-      const result = await (this.engine as any).analyzeTranscript(rawText, meetingId, parsedSegments);
+      const pipelineResult = await this.pipeline.executeFullPipeline({
+        meetingId,
+        rawTranscript: rawText,
+      });
 
-      // Store results in database
+      if (!pipelineResult.success) {
+        throw new Error('Pipeline analysis returned failure');
+      }
+
+      const summary = buildPersistableAnalysis(pipelineResult);
+
       await db.insert(analyses).values({
         meetingId,
-        scriptScore: result.scriptScore,
-        icpFit: result.icpFit,
-        objections: result.report.analise_objecoes.lista.map((obj) => ({
-          type: obj.categoria,
-          text: obj.cliente_citacao_ampliada,
-          timestamp: 0, // TODO: extrair timestamp numérico
-          handled: obj.avaliacao_resposta.nota >= 7,
-        })),
+        scriptScore: summary.scriptScore,
+        icpFit: summary.icpFit,
+        objections: summary.objections,
         highlights: [],
-        summary: result.summary,
-        nextAction: result.nextAction,
-        fullReport: result.report,
-        processingDurationMs: result.processingTimeMs,
+        summary: summary.summary,
+        nextAction: summary.nextAction,
+        fullReport: summary.fullReport,
+        processingDurationMs: summary.processingDurationMs,
       });
 
       // Mark transcript as processed
       await db
         .update(transcripts)
-        .set({ 
-          processed: true, 
-          updatedAt: new Date() 
+        .set({
+          processed: true,
+          processingError: null,
+          updatedAt: new Date()
         })
         .where(eq(transcripts.id, id));
 
       // Update meeting status
       await db
         .update(meetings)
-        .set({ 
+        .set({
           status: 'completed',
-          updatedAt: new Date() 
+          updatedAt: new Date()
         })
         .where(eq(meetings.id, meetingId));
 
@@ -112,7 +110,7 @@ export class AnalysisProcessor {
       // Mark transcript with error
       await db
         .update(transcripts)
-        .set({ 
+        .set({
           processingError: error instanceof Error ? error.message : 'Unknown error',
           updatedAt: new Date()
         })
@@ -152,7 +150,7 @@ export class AnalysisProcessor {
             eq(transcripts.processed, false),
             isNull(transcripts.processingError),
             isNull(analyses.id), // No existing analysis
-            isNull(transcripts.rawText) // Has transcript text
+            isNotNull(transcripts.rawText) // Has transcript text
           )
         )
         .limit(10); // Process in batches to avoid overwhelming the system
@@ -183,11 +181,8 @@ export class AnalysisProcessor {
   // Health check for the analysis engine
   async healthCheck(): Promise<boolean> {
     try {
-      if (this.engine instanceof (FreelawAnalysisEngine as any)) {
-        return await (this.engine as any).healthCheck();
-      }
-      // Mock engine: always healthy
-      return true;
+      const health = await this.pipeline.getSystemHealth();
+      return Boolean(health?.ragService && health?.multiModel);
     } catch (error) {
       console.error('Analysis engine health check failed:', error);
       return false;
