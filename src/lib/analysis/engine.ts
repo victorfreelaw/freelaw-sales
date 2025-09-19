@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { buildFullAnalysisPrompt, SYSTEM_PROMPT } from './prompts';
+import { getActiveGuidelines } from './guidelines-service';
 import { parseModelJSON } from './utils';
 import { Telemetry } from '@/lib/telemetry';
 import type { FullAnalysisReport } from '@/types/analysis';
@@ -222,8 +223,12 @@ export class FreelawAnalysisEngine {
   ): Promise<AnalysisResult> {
     return Telemetry.time('analysis.complete', async () => {
       const processedTranscript = this.preprocessTranscript(transcript, segments);
+      const { script, icp } = await getActiveGuidelines();
 
-      const rawReport = await this.callLLM(buildFullAnalysisPrompt(processedTranscript), 4200);
+      const rawReport = await this.callLLM(
+        buildFullAnalysisPrompt(processedTranscript, { scriptGuidelines: script, icpGuidelines: icp }),
+        4200
+      );
 
       let report: FullAnalysisReport;
 

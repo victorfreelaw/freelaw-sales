@@ -20,6 +20,24 @@ type N8NTranscriptPayload = z.infer<typeof N8NTranscriptSchema>;
 // Chave secreta para autenticação
 const N8N_WEBHOOK_SECRET = process.env.N8N_WEBHOOK_SECRET;
 
+function parseMeetingDate(value: string): Date | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+
+  // Epoch (seconds or milliseconds)
+  if (/^-?\d+$/.test(trimmed)) {
+    const numeric = Number(trimmed);
+    const millis = trimmed.length === 10 ? numeric * 1000 : numeric;
+    const date = new Date(millis);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  // Replace space between date/time with 'T'
+  const normalized = trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T');
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 // Função para processar análise IA em background
 async function processAnalysisInBackground(data: N8NTranscriptPayload, meetingId: string) {
   try {
@@ -65,6 +83,47 @@ async function processAnalysisInBackground(data: N8NTranscriptPayload, meetingId
   }
 }
 
+function processTranscriptInDatabaseBackground(transcriptId: string, meetingId: string) {
+  setImmediate(async () => {
+    try {
+      const [{ getAnalysisProcessor }, { db }, schema, { eq }] = await Promise.all([
+        import('@/lib/analysis/processor'),
+        import('@/db/connection'),
+        import('@/db/schema'),
+        import('drizzle-orm'),
+      ]);
+
+      const processor = getAnalysisProcessor();
+      const success = await processor.processTranscript(transcriptId);
+
+      await db
+        .update(schema.meetings)
+        .set({
+          status: success ? 'completed' : 'failed',
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.meetings.id, meetingId));
+
+      console.log('Background DB analysis finished', { meetingId, success });
+    } catch (error) {
+      console.error('Background DB analysis failed', { meetingId, transcriptId, error });
+      try {
+        const [{ db }, schema, { eq }] = await Promise.all([
+          import('@/db/connection'),
+          import('@/db/schema'),
+          import('drizzle-orm'),
+        ]);
+        await db
+          .update(schema.meetings)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(eq(schema.meetings.id, meetingId));
+      } catch (innerErr) {
+        console.error('Failed to update meeting status after background error', innerErr);
+      }
+    }
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Verificar autenticação
@@ -93,11 +152,22 @@ export async function POST(request: NextRequest) {
     console.log('N8N Webhook received:', JSON.stringify(rawBody, null, 2));
     
     const validatedData: N8NTranscriptPayload = N8NTranscriptSchema.parse(rawBody);
-    
+
     console.log('N8N Webhook processing:', {
       sellerName: validatedData.sellerName,
       transcriptLength: validatedData.transcript.length
     });
+
+    const meetingDate = parseMeetingDate(validatedData.meetingDate);
+    if (!meetingDate) {
+      return NextResponse.json(
+        {
+          error: 'Dados inválidos',
+          details: [{ field: 'meetingDate', message: 'Formato de data inválido' }],
+        },
+        { status: 400 }
+      );
+    }
 
     // Modo dry-run para testes sem banco
     const dryRun = process.env.N8N_WEBHOOK_DRY_RUN === 'true' || request.headers.get('x-dry-run') === 'true';
@@ -114,7 +184,7 @@ export async function POST(request: NextRequest) {
         message: 'Payload validado (dry-run) - análise será processada em background',
         echo: {
           sellerName: validatedData.sellerName,
-          meetingDate: validatedData.meetingDate,
+          meetingDate: meetingDate.toISOString(),
           recordingUrl: validatedData.recordingUrl,
           clientEmail: validatedData.clientEmail,
         },
@@ -131,11 +201,11 @@ export async function POST(request: NextRequest) {
         console.log('Dev-store: Salvando reunião inicial', {
           sellerName: validatedData.sellerName
         });
-        
+
         const savedMeeting = addDevMeeting({
           sellerName: validatedData.sellerName,
           sellerEmail: validatedData.sellerEmail,
-          meetingDate: validatedData.meetingDate,
+          meetingDate: meetingDate.toISOString(),
           recordingUrl: validatedData.recordingUrl,
           analysis: undefined, // Será atualizado quando a análise IA terminar
           title: validatedData.meetingTitle,
@@ -161,7 +231,7 @@ export async function POST(request: NextRequest) {
           meetingId: savedMeeting.id,
           echo: {
             sellerName: validatedData.sellerName,
-            meetingDate: validatedData.meetingDate,
+            meetingDate: meetingDate.toISOString(),
             recordingUrl: validatedData.recordingUrl,
             clientEmail: validatedData.clientEmail,
           },
@@ -234,7 +304,7 @@ export async function POST(request: NextRequest) {
             sourceId,
             sellerId,
             title: validatedData.meetingTitle || `Reunião - ${validatedData.sellerName}`,
-            startedAt: new Date(validatedData.meetingDate),
+            startedAt: meetingDate,
             urlFathom: validatedData.recordingUrl,
             participantCount: 2,
             status: 'processing',
@@ -256,47 +326,25 @@ export async function POST(request: NextRequest) {
         .returning();
 
       // Processar análise em background
-      try {
-        const { getAnalysisProcessor } = await import('@/lib/analysis/processor');
-        const processor = getAnalysisProcessor();
-        const success = await processor.processTranscript(transcript.id);
+      processTranscriptInDatabaseBackground(transcript.id, meetingId);
 
-        if (success) {
-          // Atualizar status da reunião como concluído
-          await db
-            .update(schema.meetings)
-            .set({
-              status: 'completed',
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.meetings.id, meetingId));
-        } else {
-          throw new Error('Failed to process transcript analysis');
-        }
-
-      } catch (analysisError) {
-        console.error('Analysis processing error:', analysisError);
-        
-        // Atualizar status para erro, mas não falhar o webhook
-        await db
-          .update(schema.meetings)
-          .set({
-            status: 'failed',
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.meetings.id, meetingId));
-      }
-
-      console.log('Meeting processed successfully:', {
-        meetingId: meetingId,
-        sellerName: validatedData.sellerName
+      console.log('Meeting queued for background processing:', {
+        meetingId,
+        sellerName: validatedData.sellerName,
       });
 
       return NextResponse.json({
         success: true,
         meetingId: meetingId,
         transcriptId: transcript.id,
-        message: 'Transcrição processada com sucesso'
+        message: 'Reunião salva - análise sendo processada em background',
+        analysisStatus: 'processing_in_background',
+        echo: {
+          sellerName: validatedData.sellerName,
+          meetingDate: meetingDate.toISOString(),
+          recordingUrl: validatedData.recordingUrl,
+          clientEmail: validatedData.clientEmail,
+        },
       });
 
     } catch (dbError) {

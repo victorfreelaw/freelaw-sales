@@ -34,9 +34,17 @@ DIFERENCIAIS FREELAW (usar quando citar autoridade):
 Sempre responda em JSON válido estruturado conforme solicitado.
 `;
 
-export function buildFullAnalysisPrompt(transcript: string): string {
-  const script = clampText(SCRIPT_GUIDELINES, 8000);
-  const icp = clampText(ICP_GUIDELINES, 8000);
+export function buildFullAnalysisPrompt(
+  transcript: string,
+  options?: { scriptGuidelines?: string; icpGuidelines?: string }
+): string {
+  const scriptSource = options?.scriptGuidelines?.trim()?.length
+    ? options?.scriptGuidelines
+    : SCRIPT_GUIDELINES;
+  const icpSource = options?.icpGuidelines?.trim()?.length ? options?.icpGuidelines : ICP_GUIDELINES;
+
+  const script = clampText(scriptSource, 8000);
+  const icp = clampText(icpSource, 8000);
   const sampleJson = `{
   "aderencia_ao_script": {
     "score_geral": 64,

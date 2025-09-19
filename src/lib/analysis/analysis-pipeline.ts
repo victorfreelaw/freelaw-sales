@@ -5,6 +5,7 @@ import { createRAGService, RAGService, RAGProcessResult } from './rag-service';
 import { createMultiModelEngine, MultiModelEngine, AnalysisContext } from './multi-model-engine';
 import { EmbeddingSearchResult } from './embeddings';
 import { parseModelJSON } from './utils';
+import { getActiveGuidelines } from './guidelines-service';
 import type { FullAnalysisReport } from '@/types/analysis';
 
 interface PipelineConfig {
@@ -71,6 +72,8 @@ class AnalysisPipeline {
     let totalTokens = 0;
     const modelsUsed: string[] = [];
 
+    const { script: scriptGuidelines, icp: icpGuidelines } = await getActiveGuidelines();
+
     // Busca RAG para cada tipo de análise
     for (const analysisType of analysisTypes) {
       console.log(`🔍 Buscando chunks relevantes para análise: ${analysisType}`);
@@ -104,10 +107,10 @@ class AnalysisPipeline {
         let result;
         switch (analysisType) {
           case 'script':
-            result = await this.multiModelEngine.analyzeScript(context);
+            result = await this.multiModelEngine.analyzeScript(context, scriptGuidelines);
             break;
           case 'icp':
-            result = await this.multiModelEngine.analyzeICP(context);
+            result = await this.multiModelEngine.analyzeICP(context, icpGuidelines);
             break;
           case 'objections':
             result = await this.multiModelEngine.analyzeObjections(context);

@@ -136,7 +136,9 @@ class MultiModelEngine {
   }
 
   // Análise de Script usando Claude 3.5 (contexto longo)
-  async analyzeScript(context: AnalysisContext): Promise<any> {
+  async analyzeScript(context: AnalysisContext, scriptGuidelines?: string): Promise<any> {
+    const guidelines = scriptGuidelines?.trim()?.length ? scriptGuidelines : SCRIPT_GUIDELINES;
+    const preferClaude = this.config.useAnthropicForDeepAnalysis && this.anthropic;
     const systemPrompt = `Você é um especialista em análise de demos de vendas B2B para a Freelaw.
 
 CONTEXTO CRÍTICO:
@@ -151,7 +153,7 @@ DIRETRIZES DE ANÁLISE:
 - Foque em resultados práticos e mensuráveis
 
 SCRIPT DEMO OFICIAL:
-${SCRIPT_GUIDELINES}`;
+${guidelines}`;
 
     const analysisPrompt = `Analise a aderência ao Script Demo desta reunião.
 
@@ -182,15 +184,25 @@ Retorne em formato JSON com a seguinte estrutura:
   }
 }`;
 
-    if (this.config.useAnthropicForDeepAnalysis && this.anthropic) {
-      return await this.deepAnalysisWithClaude(context, analysisPrompt, systemPrompt);
-    } else {
-      return await this.consolidationWithGPT4o(context, analysisPrompt, systemPrompt);
+    if (preferClaude) {
+      try {
+        return await this.deepAnalysisWithClaude(context, analysisPrompt, systemPrompt);
+      } catch (error: any) {
+        if (error?.status === 429 || error?.error?.type === 'rate_limit_error') {
+          console.warn('Anthropic rate limit reached, falling back to GPT-4o (script analysis).');
+          return await this.consolidationWithGPT4o(context, analysisPrompt, systemPrompt);
+        }
+        throw error;
+      }
     }
+
+    return await this.consolidationWithGPT4o(context, analysisPrompt, systemPrompt);
   }
 
   // Análise de ICP usando Claude 3.5
-  async analyzeICP(context: AnalysisContext): Promise<any> {
+  async analyzeICP(context: AnalysisContext, icpGuidelines?: string): Promise<any> {
+    const guidelines = icpGuidelines?.trim()?.length ? icpGuidelines : ICP_GUIDELINES;
+    const preferClaude = this.config.useAnthropicForDeepAnalysis && this.anthropic;
     const systemPrompt = `Você é um especialista em qualificação de ICP (Ideal Customer Profile) para a Freelaw.
 
 CONTEXTO CRÍTICO:
@@ -199,7 +211,7 @@ CONTEXTO CRÍTICO:
 - Foque em dados concretos mencionados na reunião
 
 CRITÉRIOS ICP FREELAW:
-${ICP_GUIDELINES}`;
+${guidelines}`;
 
     const analysisPrompt = `Analise o fit de ICP deste cliente baseado nos trechos da reunião.
 
@@ -227,11 +239,19 @@ Retorne em formato JSON:
   "observacoes": "string"
 }`;
 
-    if (this.config.useAnthropicForDeepAnalysis && this.anthropic) {
-      return await this.deepAnalysisWithClaude(context, analysisPrompt, systemPrompt);
-    } else {
-      return await this.consolidationWithGPT4o(context, analysisPrompt, systemPrompt);
+    if (preferClaude) {
+      try {
+        return await this.deepAnalysisWithClaude(context, analysisPrompt, systemPrompt);
+      } catch (error: any) {
+        if (error?.status === 429 || error?.error?.type === 'rate_limit_error') {
+          console.warn('Anthropic rate limit reached, falling back to GPT-4o (ICP analysis).');
+          return await this.consolidationWithGPT4o(context, analysisPrompt, systemPrompt);
+        }
+        throw error;
+      }
     }
+
+    return await this.consolidationWithGPT4o(context, analysisPrompt, systemPrompt);
   }
 
   // Análise de Objeções
@@ -368,7 +388,10 @@ Retorne um relatório consolidado em formato JSON:
   }
 
   // Análise completa orquestrada
-  async analyzeComplete(context: AnalysisContext): Promise<{
+  async analyzeComplete(
+    context: AnalysisContext,
+    guidelines?: { script?: string; icp?: string }
+  ): Promise<{
     report: FullAnalysisReport;
     stats: {
       totalTokens: number;
@@ -385,8 +408,8 @@ Retorne um relatório consolidado em formato JSON:
 
       // 1. Análises em paralelo para otimizar tempo
       const [scriptResult, icpResult, objectionsResult] = await Promise.all([
-        this.analyzeScript(context),
-        this.analyzeICP(context),
+        this.analyzeScript(context, guidelines?.script),
+        this.analyzeICP(context, guidelines?.icp),
         this.analyzeObjections(context)
       ]);
 

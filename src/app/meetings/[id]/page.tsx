@@ -7,7 +7,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { Loader2 } from 'lucide-react';
 
 interface MeetingDetailsPageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }
 
 function MeetingDetailsSkeleton() {
@@ -40,14 +40,16 @@ function MeetingDetailsSkeleton() {
 
 async function MeetingDetailsPage({ params }: MeetingDetailsPageProps) {
   const user = await getCurrentUser();
-  
-  if (!user) {
-    notFound();
-  }
+  const viewer = user ?? {
+    id: 'public-viewer',
+    email: 'public@freelaw.com',
+    fullName: 'Visualização Pública',
+    role: 'admin' as const,
+  };
 
   // For reps, only show their own meetings
-  const userId = user.role === 'rep' ? user.id : undefined;
-  const { id } = await params;
+  const userId = user?.role === 'rep' ? user.id : undefined;
+  const { id } = params;
   const meeting = await getMeetingDetails(id, userId);
 
   if (!meeting) {
@@ -57,7 +59,7 @@ async function MeetingDetailsPage({ params }: MeetingDetailsPageProps) {
   return (
     <MainLayout>
       <Suspense fallback={<MeetingDetailsSkeleton />}>
-        <MeetingDetailsContent meeting={meeting} currentUser={user} />
+        <MeetingDetailsContent meeting={meeting} currentUser={viewer} />
       </Suspense>
     </MainLayout>
   );

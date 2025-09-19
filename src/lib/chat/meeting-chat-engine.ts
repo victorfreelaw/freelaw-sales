@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { clampText } from '@/lib/analysis/utils';
-import { SCRIPT_GUIDELINES, ICP_GUIDELINES } from '@/lib/analysis/guidelines';
+import { getActiveGuidelines } from '@/lib/analysis/guidelines-service';
 import type { FullAnalysisReport } from '@/types/analysis';
 
 interface TranscriptSegment {
@@ -99,8 +99,9 @@ export class MeetingChatEngine {
 
     const reportJson = report ? clampText(JSON.stringify(report, null, 2), 7000) : 'Análise não disponível ainda - use apenas a transcrição para responder.';
     const rawTranscript = clampText(transcriptText, 5000);
-    const scriptGuidelines = clampText(SCRIPT_GUIDELINES, 4000);
-    const icpGuidelines = clampText(ICP_GUIDELINES, 4000);
+    const { script, icp } = await getActiveGuidelines();
+    const scriptGuidelines = clampText(script, 4000);
+    const icpGuidelines = clampText(icp, 4000);
 
     const userPrompt = [
       'CONTEXTO COMPLETO DA DEMO FREELAW',

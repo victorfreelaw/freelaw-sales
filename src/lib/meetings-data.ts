@@ -1,7 +1,7 @@
 // Meetings data fetching utilities  
 import { db } from '@/db/connection';
 import { meetings, analyses, users } from '@/db/schema';
-import { eq, desc, and, or, ilike, gte, lte } from 'drizzle-orm';
+import { eq, desc, and, or, ilike, gte, lte, count } from 'drizzle-orm';
 import { subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter } from 'date-fns';
 
 export interface MeetingsFilters {
@@ -200,13 +200,13 @@ export async function getMeetings(
     
     // Get total count for pagination
     const countQuery = await db
-      .select({ count: db.count() })
+      .select({ total: count() })
       .from(meetings)
       .leftJoin(users, eq(meetings.sellerId, users.id))
       .leftJoin(analyses, eq(meetings.id, analyses.meetingId))
       .where(conditions.length > 0 ? and(...conditions) : undefined);
     
-    const totalCount = countQuery[0]?.count || 0;
+    const totalCount = Number(countQuery[0]?.total || 0);
     
     // Execute main query with pagination
     const results = await query

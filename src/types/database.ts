@@ -1,10 +1,11 @@
 import { InferSelectModel, InferInsertModel } from 'drizzle-orm';
-import { 
-  users, 
-  meetings, 
-  transcripts, 
-  analyses, 
-  syncEvents 
+import {
+  users,
+  meetings,
+  transcripts,
+  analyses,
+  syncEvents,
+  playbooks,
 } from '@/db/schema';
 
 // User types
@@ -27,6 +28,10 @@ export type NewAnalysis = InferInsertModel<typeof analyses>;
 export type SyncEvent = InferSelectModel<typeof syncEvents>;
 export type NewSyncEvent = InferInsertModel<typeof syncEvents>;
 
+// Playbook types
+export type Playbook = InferSelectModel<typeof playbooks>;
+export type NewPlaybook = InferInsertModel<typeof playbooks>;
+
 // Extended types with relations
 export type MeetingWithAnalysis = Meeting & {
   analysis?: Analysis;
@@ -46,3 +51,4 @@ export type MeetingStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export type ICPFit = 'high' | 'medium' | 'low';
 export type SyncStatus = 'pending' | 'completed' | 'failed';
 export type HighlightType = 'buying_signal' | 'objection' | 'competitor' | 'budget' | 'timeline' | 'authority';
+export type PlaybookType = 'script' | 'icp';

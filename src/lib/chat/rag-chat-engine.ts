@@ -4,7 +4,7 @@
 import OpenAI from 'openai';
 import { createAnalysisPipeline } from '../analysis/analysis-pipeline';
 import { EmbeddingSearchResult } from '../analysis/embeddings';
-import { SCRIPT_GUIDELINES, ICP_GUIDELINES } from '../analysis/guidelines';
+import { getActiveGuidelines } from '../analysis/guidelines-service';
 import type { FullAnalysisReport } from '@/types/analysis';
 
 interface RAGChatInput {
@@ -93,6 +93,7 @@ export class RAGChatEngine {
     report?: FullAnalysisReport | null,
     includeTimestamps: boolean = true
   ): Promise<string> {
+    const { script, icp } = await getActiveGuidelines();
     const systemPrompt = `Você é o especialista em análise de demos da Freelaw com acesso RAG completo.
 
 CONTEXTO CRÍTICO:
@@ -108,9 +109,9 @@ DIRETRIZES:
 - Máximo 600 caracteres, objetivo e preciso
 
 REFERÊNCIAS FREELAW:
-${SCRIPT_GUIDELINES.slice(0, 1000)}
+${script.slice(0, 1000)}
 
-${ICP_GUIDELINES.slice(0, 1000)}`;
+${icp.slice(0, 1000)}`;
 
     const contextChunks = chunks.map(chunk => {
       const timestamp = this.formatTimestamp(chunk.startTime);
