@@ -124,6 +124,10 @@ export function FullAnalysisReportView({ report, scriptScore, icpFit }: FullAnal
     : [];
   const objections = report?.analise_objecoes?.lista ?? [];
   const objectionKpis = report?.analise_objecoes?.kpis;
+  const scoreByCategory = objectionKpis?.score_medio_por_categoria ?? {};
+  const scoreEntries = Object.entries(scoreByCategory);
+  const principaisLacunas = objectionKpis?.principais_lacunas ?? [];
+  const tratadasEfetivamente = objectionKpis?.tratadas_efetivamente ?? 0;
 
   return (
     <div className="space-y-8">
@@ -211,22 +215,32 @@ export function FullAnalysisReportView({ report, scriptScore, icpFit }: FullAnal
             <CardContent className="p-4 grid gap-2 text-sm text-muted-foreground">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>Total tratadas efetivamente</span>
-                <Badge variant="success">{objectionKpis.tratadas_efetivamente}</Badge>
+                <Badge variant="success">{tratadasEfetivamente}</Badge>
               </div>
               <div>
                 <span className="font-medium text-foreground">Score médio por categoria</span>
                 <ul className="mt-1 space-y-1">
-                  {Object.entries(objectionKpis.score_medio_por_categoria).map(([categoria, score]) => (
-                    <li key={categoria}>{categoria}: {score.toFixed(1)}</li>
-                  ))}
+                  {scoreEntries.length > 0 ? (
+                    scoreEntries.map(([categoria, score]) => (
+                      <li key={categoria}>
+                        {categoria}: {typeof score === 'number' ? score.toFixed(1) : String(score)}
+                      </li>
+                    ))
+                  ) : (
+                    <li className="text-muted-foreground/80">Sem dados suficientes.</li>
+                  )}
                 </ul>
               </div>
               <div>
                 <span className="font-medium text-foreground">Principais lacunas</span>
                 <ul className="mt-1 space-y-1">
-                  {objectionKpis.principais_lacunas.map((lacuna, index) => (
-                    <li key={index}>• {lacuna}</li>
-                  ))}
+                  {principaisLacunas.length > 0 ? (
+                    principaisLacunas.map((lacuna, index) => (
+                      <li key={index}>• {lacuna}</li>
+                    ))
+                  ) : (
+                    <li className="text-muted-foreground/80">Nenhuma lacuna registrada.</li>
+                  )}
                 </ul>
               </div>
             </CardContent>

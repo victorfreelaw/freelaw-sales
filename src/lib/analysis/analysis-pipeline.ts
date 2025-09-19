@@ -4,6 +4,7 @@
 import { createRAGService, RAGService, RAGProcessResult } from './rag-service';
 import { createMultiModelEngine, MultiModelEngine, AnalysisContext } from './multi-model-engine';
 import { EmbeddingSearchResult } from './embeddings';
+import { parseModelJSON } from './utils';
 import type { FullAnalysisReport } from '@/types/analysis';
 
 interface PipelineConfig {
@@ -113,7 +114,7 @@ class AnalysisPipeline {
             break;
         }
 
-        analyses[analysisType] = JSON.parse(result.content);
+        analyses[analysisType] = parseModelJSON(result.content, `análise ${analysisType}`);
         totalTokens += result.tokensUsed;
         
         if (!modelsUsed.includes(result.model)) {
@@ -159,7 +160,10 @@ class AnalysisPipeline {
       context
     );
 
-    const report = JSON.parse(consolidationResult.content) as FullAnalysisReport;
+    const report = parseModelJSON<FullAnalysisReport>(
+      consolidationResult.content,
+      'relatório consolidado'
+    );
 
     console.log(`✅ CAMADA 3: Relatório consolidado (${consolidationResult.tokensUsed} tokens)`);
 
@@ -222,7 +226,14 @@ class AnalysisPipeline {
       const ragResult = await this.layer1_ProcessAndIndex(meetingId, rawTranscript);
 
       // CAMADA 2: Análises Especializadas
-      const layer2Result = await this.layer2_SpecializedAnalyses(meetingId, analysisTypes);
+      const specializedAnalysisTypes = analysisTypes.filter(
+        (type): type is 'script' | 'icp' | 'objections' => type !== 'summary'
+      );
+
+      const layer2Result = await this.layer2_SpecializedAnalyses(
+        meetingId,
+        specializedAnalysisTypes
+      );
 
       // CAMADA 3: Consolidação
       const layer3Result = await this.layer3_ConsolidateReport(
@@ -406,6 +417,14 @@ class AnalysisPipeline {
         storageStats: {}
       };
     }
+  }
+
+  getRagService(): RAGService {
+    return this.ragService;
+  }
+
+  getMultiModelEngine(): MultiModelEngine {
+    return this.multiModelEngine;
   }
 }
 

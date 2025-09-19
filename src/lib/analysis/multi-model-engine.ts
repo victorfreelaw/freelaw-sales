@@ -4,8 +4,11 @@
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { EmbeddingSearchResult } from './embeddings';
+import { parseModelJSON } from './utils';
 import { SCRIPT_GUIDELINES, ICP_GUIDELINES } from './guidelines';
 import type { FullAnalysisReport } from '@/types/analysis';
+
+const CLAUDE_SONNET_MODEL = 'claude-3-5-haiku-20241022';
 
 interface ModelOrchestrationConfig {
   openAIKey: string;
@@ -18,7 +21,7 @@ interface AnalysisContext {
   meetingId: string;
   relevantChunks: EmbeddingSearchResult[];
   fullTranscript?: string;
-  analysisType: 'script' | 'icp' | 'objections' | 'summary';
+  analysisType: 'script' | 'icp' | 'objections' | 'summary' | 'general';
 }
 
 interface ModelResponse {
@@ -58,8 +61,8 @@ class MultiModelEngine {
       const contextContent = this.buildContextContent(context);
       
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 4000,
+        model: CLAUDE_SONNET_MODEL,
+        max_tokens: 6000,
         temperature: 0.1,
         system: systemPrompt,
         messages: [
@@ -74,8 +77,8 @@ class MultiModelEngine {
       
       return {
         content,
-        model: 'claude-3-haiku-20240307',
-        tokensUsed: response.usage.input_tokens + response.usage.output_tokens,
+        model: CLAUDE_SONNET_MODEL,
+        tokensUsed: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0),
         processingTime: Date.now() - startTime
       };
     } catch (error) {
@@ -392,16 +395,19 @@ Retorne um relatório consolidado em formato JSON:
 
       // 2. Consolidação final
       const finalResult = await this.generateFinalReport(
-        JSON.parse(scriptResult.content),
-        JSON.parse(icpResult.content),
-        JSON.parse(objectionsResult.content),
+        parseModelJSON(scriptResult.content, 'análise script'),
+        parseModelJSON(icpResult.content, 'análise ICP'),
+        parseModelJSON(objectionsResult.content, 'análise objeções'),
         context
       );
 
       totalTokens += finalResult.tokensUsed;
       modelsUsed.push(finalResult.model);
 
-      const report = JSON.parse(finalResult.content) as FullAnalysisReport;
+      const report = parseModelJSON<FullAnalysisReport>(
+        finalResult.content,
+        'relatório consolidado'
+      );
 
       console.log('✅ Análise multi-modelo concluída');
 
@@ -462,7 +468,7 @@ Retorne um relatório consolidado em formato JSON:
     if (this.anthropic) {
       try {
         await this.anthropic.messages.create({
-          model: 'claude-3-haiku-20240307',
+          model: CLAUDE_SONNET_MODEL,
           max_tokens: 1,
           messages: [{ role: 'user', content: 'test' }]
         });

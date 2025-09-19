@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { buildFullAnalysisPrompt, SYSTEM_PROMPT } from './prompts';
+import { parseModelJSON } from './utils';
 import { Telemetry } from '@/lib/telemetry';
 import type { FullAnalysisReport } from '@/types/analysis';
 
@@ -228,7 +229,7 @@ export class FreelawAnalysisEngine {
 
       try {
         console.log('Full Analysis Raw Response:', rawReport?.substring(0, 600));
-        const parsed = JSON.parse(rawReport);
+        const parsed = parseModelJSON(rawReport, 'análise completa');
         report = FullReportSchema.parse(parsed) as FullAnalysisReport;
       } catch (error) {
         console.error('Failed to parse full analysis response:', error);
