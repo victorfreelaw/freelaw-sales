@@ -32,29 +32,25 @@ async function testConfigurations() {
     }
   }
 
-  // 2. Teste Anthropic
-  console.log('\n2️⃣ Testando Anthropic...');
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicKey || anthropicKey.includes('fake')) {
-    console.log('   ❌ ANTHROPIC_API_KEY não configurada');
-  } else if (!anthropicKey.startsWith('sk-ant-')) {
-    console.log('   ❌ ANTHROPIC_API_KEY formato inválido');
+  // 2. Teste Gemini
+  console.log('\n2️⃣ Testando Gemini...');
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey || geminiKey.includes('fake')) {
+    console.log('   ❌ GEMINI_API_KEY não configurada');
+  } else if (!/^AI[a-zA-Z0-9_-]{20,}$/.test(geminiKey) && !geminiKey.startsWith('AIza')) {
+    console.log('   ❌ GEMINI_API_KEY formato inválido');
   } else {
-    console.log('   ✅ ANTHROPIC_API_KEY configurada corretamente');
+    console.log('   ✅ GEMINI_API_KEY configurada corretamente');
     
     try {
-      const Anthropic = require('@anthropic-ai/sdk');
-      const anthropic = new Anthropic({ apiKey: anthropicKey });
+      const { GoogleGenerativeAI } = require('@google/generative-ai');
+      const genAI = new GoogleGenerativeAI(geminiKey);
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+      await model.generateContent({ contents: [{ role: 'user', parts: [{ text: 'teste rápido' }] }] });
       
-      const response = await anthropic.messages.create({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 1,
-        messages: [{ role: 'user', content: 'test' }]
-      });
-      
-      console.log('   ✅ Anthropic API funcionando!');
+      console.log('   ✅ Gemini API funcionando!');
     } catch (error) {
-      console.log('   ❌ Erro no Anthropic:', error.message);
+      console.log('   ❌ Erro no Gemini:', error.message);
     }
   }
 
@@ -108,7 +104,7 @@ async function testConfigurations() {
   console.log('\n🎯 RESUMO:');
   console.log('📋 Para configuração completa você precisa:');
   console.log('1. ✅ OpenAI configurada');
-  console.log('2. ⏳ Anthropic API Key');
+  console.log('2. ⏳ Gemini API Key');
   console.log('3. ⏳ Supabase URL + Service Key');
   console.log('4. ⏳ Executar setup do banco');
   

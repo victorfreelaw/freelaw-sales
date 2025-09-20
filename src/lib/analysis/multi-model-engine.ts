@@ -1,19 +1,19 @@
 // Engine de análise multi-modelo
-// Orquestra Claude 3.5 Sonnet + GPT-4o para análises otimizadas
+// Orquestra Gemini 1.5 Pro + GPT-4o para análises otimizadas
 
 import OpenAI from 'openai';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { EmbeddingSearchResult } from './embeddings';
 import { parseModelJSON } from './utils';
 import { SCRIPT_GUIDELINES, ICP_GUIDELINES } from './guidelines';
 import type { FullAnalysisReport } from '@/types/analysis';
 
-const CLAUDE_SONNET_MODEL = 'claude-3-5-haiku-20241022';
+const GEMINI_PRO_MODEL = 'gemini-1.5-pro';
 
 interface ModelOrchestrationConfig {
   openAIKey: string;
-  anthropicKey?: string;
-  useAnthropicForDeepAnalysis?: boolean;
+  geminiKey?: string;
+  useGeminiForDeepAnalysis?: boolean;
   fallbackToOpenAI?: boolean;
 }
 
@@ -33,62 +33,71 @@ interface ModelResponse {
 
 class MultiModelEngine {
   private openai: OpenAI;
-  private anthropic: Anthropic | null = null;
+  private geminiClient: GoogleGenerativeAI | null = null;
   private config: ModelOrchestrationConfig;
 
   constructor(config: ModelOrchestrationConfig) {
     this.config = config;
     this.openai = new OpenAI({ apiKey: config.openAIKey });
-    
-    if (config.anthropicKey) {
-      this.anthropic = new Anthropic({ apiKey: config.anthropicKey });
+
+    if (config.geminiKey) {
+      this.geminiClient = new GoogleGenerativeAI(config.geminiKey);
     }
   }
 
-  // Análise profunda usando Claude 3.5 Sonnet (janela longa)
-  async deepAnalysisWithClaude(
+  // Análise profunda usando Gemini 1.5 Pro (janela longa)
+  async deepAnalysisWithGemini(
     context: AnalysisContext,
     prompt: string,
     systemPrompt: string
   ): Promise<ModelResponse> {
-    if (!this.anthropic) {
-      throw new Error('Anthropic API não configurada');
+    if (!this.geminiClient) {
+      throw new Error('Gemini API não configurada');
     }
 
     const startTime = Date.now();
 
     try {
       const contextContent = this.buildContextContent(context);
-      
-      const response = await this.anthropic.messages.create({
-        model: CLAUDE_SONNET_MODEL,
-        max_tokens: 6000,
-        temperature: 0.1,
-        system: systemPrompt,
-        messages: [
+
+      const model = this.geminiClient.getGenerativeModel({ model: GEMINI_PRO_MODEL });
+      const result = await model.generateContent({
+        contents: [
           {
             role: 'user',
-            content: `${contextContent}\n\n${prompt}`
+            parts: [{ text: `${contextContent}\n\n${prompt}` }]
           }
-        ]
+        ],
+        systemInstruction: {
+          role: 'system',
+          parts: [{ text: systemPrompt }]
+        },
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 6000
+        }
       });
 
-      const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
-      
+      const geminiResponse = result.response;
+      const content = geminiResponse?.text() || '';
+      const usage = geminiResponse?.usageMetadata;
+
       return {
         content,
-        model: CLAUDE_SONNET_MODEL,
-        tokensUsed: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0),
+        model: GEMINI_PRO_MODEL,
+        tokensUsed:
+          usage?.totalTokenCount ??
+          (usage?.promptTokenCount || 0) + (usage?.candidatesTokenCount || 0),
         processingTime: Date.now() - startTime
       };
     } catch (error) {
-      console.error('Erro no Claude:', error);
-      
+      console.error('Erro no Gemini:', error);
+
       if (this.config.fallbackToOpenAI) {
         console.log('Usando fallback para GPT-4o');
         return await this.consolidationWithGPT4o(context, prompt, systemPrompt);
       }
-      
+
       throw error;
     }
   }
@@ -135,10 +144,10 @@ class MultiModelEngine {
     }
   }
 
-  // Análise de Script usando Claude 3.5 (contexto longo)
+  // Análise de Script usando Gemini 1.5 (contexto longo)
   async analyzeScript(context: AnalysisContext, scriptGuidelines?: string): Promise<any> {
     const guidelines = scriptGuidelines?.trim()?.length ? scriptGuidelines : SCRIPT_GUIDELINES;
-    const preferClaude = this.config.useAnthropicForDeepAnalysis && this.anthropic;
+    const preferGemini = Boolean(this.config.useGeminiForDeepAnalysis && this.geminiClient);
     const systemPrompt = `Você é um especialista em análise de demos de vendas B2B para a Freelaw.
 
 CONTEXTO CRÍTICO:
@@ -184,12 +193,12 @@ Retorne em formato JSON com a seguinte estrutura:
   }
 }`;
 
-    if (preferClaude) {
+    if (preferGemini) {
       try {
-        return await this.deepAnalysisWithClaude(context, analysisPrompt, systemPrompt);
+        return await this.deepAnalysisWithGemini(context, analysisPrompt, systemPrompt);
       } catch (error: any) {
-        if (error?.status === 429 || error?.error?.type === 'rate_limit_error') {
-          console.warn('Anthropic rate limit reached, falling back to GPT-4o (script analysis).');
+        if (error?.status === 429 || error?.error?.code === 'RESOURCE_EXHAUSTED') {
+          console.warn('Limite de uso do Gemini atingido, voltando para GPT-4o (análise de script).');
           return await this.consolidationWithGPT4o(context, analysisPrompt, systemPrompt);
         }
         throw error;
@@ -199,10 +208,10 @@ Retorne em formato JSON com a seguinte estrutura:
     return await this.consolidationWithGPT4o(context, analysisPrompt, systemPrompt);
   }
 
-  // Análise de ICP usando Claude 3.5
+  // Análise de ICP usando Gemini 1.5
   async analyzeICP(context: AnalysisContext, icpGuidelines?: string): Promise<any> {
     const guidelines = icpGuidelines?.trim()?.length ? icpGuidelines : ICP_GUIDELINES;
-    const preferClaude = this.config.useAnthropicForDeepAnalysis && this.anthropic;
+    const preferGemini = Boolean(this.config.useGeminiForDeepAnalysis && this.geminiClient);
     const systemPrompt = `Você é um especialista em qualificação de ICP (Ideal Customer Profile) para a Freelaw.
 
 CONTEXTO CRÍTICO:
@@ -239,12 +248,12 @@ Retorne em formato JSON:
   "observacoes": "string"
 }`;
 
-    if (preferClaude) {
+    if (preferGemini) {
       try {
-        return await this.deepAnalysisWithClaude(context, analysisPrompt, systemPrompt);
+        return await this.deepAnalysisWithGemini(context, analysisPrompt, systemPrompt);
       } catch (error: any) {
-        if (error?.status === 429 || error?.error?.type === 'rate_limit_error') {
-          console.warn('Anthropic rate limit reached, falling back to GPT-4o (ICP analysis).');
+        if (error?.status === 429 || error?.error?.code === 'RESOURCE_EXHAUSTED') {
+          console.warn('Limite de uso do Gemini atingido, voltando para GPT-4o (análise ICP).');
           return await this.consolidationWithGPT4o(context, analysisPrompt, systemPrompt);
         }
         throw error;
@@ -471,10 +480,10 @@ Retorne um relatório consolidado em formato JSON:
   }
 
   // Testa disponibilidade dos modelos
-  async testModels(): Promise<{ openai: boolean; anthropic: boolean }> {
+  async testModels(): Promise<{ openai: boolean; gemini: boolean }> {
     const tests = {
       openai: false,
-      anthropic: false
+      gemini: false
     };
 
     try {
@@ -488,16 +497,16 @@ Retorne um relatório consolidado em formato JSON:
       console.error('OpenAI não disponível:', error);
     }
 
-    if (this.anthropic) {
+    if (this.geminiClient) {
       try {
-        await this.anthropic.messages.create({
-          model: CLAUDE_SONNET_MODEL,
-          max_tokens: 1,
-          messages: [{ role: 'user', content: 'test' }]
+        const model = this.geminiClient.getGenerativeModel({ model: GEMINI_PRO_MODEL });
+        await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: 'test' }] }],
+          generationConfig: { maxOutputTokens: 1 }
         });
-        tests.anthropic = true;
+        tests.gemini = true;
       } catch (error) {
-        console.error('Anthropic não disponível:', error);
+        console.error('Gemini não disponível:', error);
       }
     }
 
@@ -508,7 +517,7 @@ Retorne um relatório consolidado em formato JSON:
 // Factory function
 export function createMultiModelEngine(): MultiModelEngine | null {
   const openAIKey = process.env.OPENAI_API_KEY;
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
 
   if (!openAIKey) {
     console.error('OPENAI_API_KEY não configurada');
@@ -517,8 +526,8 @@ export function createMultiModelEngine(): MultiModelEngine | null {
 
   return new MultiModelEngine({
     openAIKey,
-    anthropicKey,
-    useAnthropicForDeepAnalysis: !!anthropicKey,
+    geminiKey,
+    useGeminiForDeepAnalysis: !!geminiKey,
     fallbackToOpenAI: true
   });
 }

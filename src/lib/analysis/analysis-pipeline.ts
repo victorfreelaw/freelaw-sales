@@ -13,7 +13,7 @@ interface PipelineConfig {
   rawTranscript: string;
   analysisTypes?: ('script' | 'icp' | 'objections' | 'summary')[];
   enableRAGCaching?: boolean;
-  useAnthropicForDeepAnalysis?: boolean;
+  useGeminiForDeepAnalysis?: boolean;
 }
 
 interface PipelineResult {
@@ -218,7 +218,7 @@ class AnalysisPipeline {
       rawTranscript,
       analysisTypes = ['script', 'icp', 'objections'],
       enableRAGCaching = true,
-      useAnthropicForDeepAnalysis = true
+      useGeminiForDeepAnalysis = true
     } = config;
 
     console.log(`🚀 Iniciando pipeline completo para reunião ${meetingId}`);
@@ -407,7 +407,7 @@ class AnalysisPipeline {
 
       return {
         ragService: ragHealth,
-        multiModel: modelHealth.openai && (modelHealth.anthropic || true), // Anthropic é opcional
+        multiModel: modelHealth.openai && (modelHealth.gemini || true), // Gemini é opcional
         totalMeetingsIndexed: stats.totalMeetings || 0,
         storageStats: stats
       };
